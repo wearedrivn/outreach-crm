@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  leads        Lead[]
+}
+
+model Lead {
+  id              String   @id @default(cuid())
+  companyName     String
+  niche           String
+  instagramHandle String
+  website         String   @default("")
+  brandScore      Int      @default(5)
+  contentScore    Int      @default(5)
+  revenueScore    Int      @default(5)
+  status          String   @default("new")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+}
