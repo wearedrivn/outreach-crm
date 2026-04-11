@@ -15,14 +15,38 @@ export default function LoginPage() {
     setError("");
 
     const form = new FormData(e.currentTarget);
-    const res = await signIn("credentials", {
-      email: form.get("email"),
-      password: form.get("password"),
-      redirect: false,
-    });
+
+    // Hard 15s timeout so the UI never hangs forever
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 15000)
+    );
+
+    let res: Awaited<ReturnType<typeof signIn>> | null = null;
+    try {
+      res = (await Promise.race([
+        signIn("credentials", {
+          email: form.get("email"),
+          password: form.get("password"),
+          redirect: false,
+        }),
+        timeout,
+      ])) as Awaited<ReturnType<typeof signIn>> | null;
+    } catch (err) {
+      setError(`Sign-in crashed: ${(err as Error).message}`);
+      setLoading(false);
+      return;
+    }
+
+    if (res === null) {
+      setError(
+        "Sign-in timed out after 15s. The auth endpoint is not responding — check Vercel function logs and confirm AUTH_SECRET is set."
+      );
+      setLoading(false);
+      return;
+    }
 
     if (res?.error) {
-      setError("Invalid email or password.");
+      setError(`Sign-in failed: ${res.error}${res.code ? ` (${res.code})` : ""}`);
       setLoading(false);
       return;
     }
