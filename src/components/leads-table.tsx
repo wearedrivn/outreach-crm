@@ -1,6 +1,6 @@
 "use client";
 
-import type { Lead } from "@/generated/prisma/client";
+import type { Lead } from "@prisma/client";
 
 const statusColors: Record<string, string> = {
   new: "bg-purple-500/15 text-purple-400",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Lead } from "@/generated/prisma/client";
+import type { Lead } from "@prisma/client";
 
 type Props = {
   lead: Lead;
