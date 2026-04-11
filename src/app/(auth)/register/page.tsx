@@ -19,15 +19,25 @@ export default function RegisterPage() {
     const email = form.get("email") as string;
     const password = form.get("password") as string;
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+    } catch (err) {
+      setError(`Network error: ${(err as Error).message}`);
+      setLoading(false);
+      return;
+    }
 
     if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Registration failed.");
+      const data = await res.json().catch(() => ({}));
+      const parts = [data.error || "Registration failed."];
+      if (data.detail) parts.push(data.detail);
+      if (data.code) parts.push(`(code: ${data.code})`);
+      setError(parts.join(" — "));
       setLoading(false);
       return;
     }
