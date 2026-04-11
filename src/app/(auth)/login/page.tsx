@@ -1,59 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+import { loginAction, type LoginState } from "./actions";
+
+const initialState: LoginState = { error: null };
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+    >
+      {pending ? "Signing in..." : "Sign in"}
+    </button>
+  );
+}
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const form = new FormData(e.currentTarget);
-
-    // Hard 15s timeout so the UI never hangs forever
-    const timeout = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), 15000)
-    );
-
-    let res: Awaited<ReturnType<typeof signIn>> | null = null;
-    try {
-      res = (await Promise.race([
-        signIn("credentials", {
-          email: form.get("email"),
-          password: form.get("password"),
-          redirect: false,
-        }),
-        timeout,
-      ])) as Awaited<ReturnType<typeof signIn>> | null;
-    } catch (err) {
-      setError(`Sign-in crashed: ${(err as Error).message}`);
-      setLoading(false);
-      return;
-    }
-
-    if (res === null) {
-      setError(
-        "Sign-in timed out after 15s. The auth endpoint is not responding — check Vercel function logs and confirm AUTH_SECRET is set."
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (res?.error) {
-      setError(`Sign-in failed: ${res.error}${res.code ? ` (${res.code})` : ""}`);
-      setLoading(false);
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
-  }
+  const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
@@ -63,13 +30,13 @@ export default function LoginPage() {
           Access your outreach dashboard.
         </p>
 
-        {error && (
+        {state.error && (
           <div className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">
-            {error}
+            {state.error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form action={formAction} className="space-y-4">
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Email</label>
             <input
@@ -88,13 +55,7 @@ export default function LoginPage() {
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
+          <SubmitButton />
         </form>
 
         <p className="text-sm text-zinc-500 mt-6 text-center">

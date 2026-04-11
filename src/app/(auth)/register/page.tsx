@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
@@ -42,19 +41,10 @@ export default function RegisterPage() {
       return;
     }
 
-    const signInRes = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (signInRes?.error) {
-      setError("Account created but sign-in failed. Try logging in.");
-      setLoading(false);
-      return;
-    }
-
-    router.push("/");
+    // Account created — send them to login. Sign-in happens via server
+    // action there, which avoids the client-side NextAuth fetch dance
+    // that was hanging in production.
+    router.push("/login");
     router.refresh();
   }
 
