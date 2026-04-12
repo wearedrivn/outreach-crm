@@ -34,18 +34,22 @@ export function MessageModal({ lead, onClose }: Props) {
     setMessageType(type);
 
     try {
-      const res = await fetch("/api/messages", {
+      const res = await fetch("/api/generate-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadId: lead.id, type }),
       });
 
-      if (!res.ok) throw new Error("Failed to generate message");
-
       const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to generate message.");
+        return;
+      }
+
       setMessage(data.message);
     } catch {
-      setError("Failed to generate message. Try again.");
+      setError("Network error. Try again.");
     } finally {
       setLoading(false);
     }
@@ -109,9 +113,10 @@ export function MessageModal({ lead, onClose }: Props) {
           {/* Initial state — generate buttons */}
           {!message && !loading && (
             <div className="text-center py-8 animate-fade-in">
-              <p className="text-zinc-500 text-sm mb-6">
+              <p className="text-zinc-500 text-sm mb-1">
                 Generate a personalized outreach message for {lead.companyName}
               </p>
+              <p className="text-[11px] text-zinc-600 mb-6">Powered by Claude AI</p>
               <div className="flex flex-col sm:flex-row justify-center gap-3">
                 <button
                   onClick={() => generate("outreach")}
