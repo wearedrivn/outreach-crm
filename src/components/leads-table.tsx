@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Lead } from "@prisma/client";
 
 const statusColors: Record<string, string> = {
@@ -11,11 +12,11 @@ const statusColors: Record<string, string> = {
 };
 
 function ScoreBadge({ score }: { score: number }) {
-  let color = "text-green-400";
+  let color = "text-emerald-400";
   if (score <= 4) color = "text-red-400";
   else if (score <= 6) color = "text-amber-400";
   return (
-    <span>
+    <span className="tabular-nums">
       <span className={`font-semibold ${color}`}>{score}</span>
       <span className="text-zinc-600">/10</span>
     </span>
@@ -34,114 +35,196 @@ type Props = {
 };
 
 export function LeadsTable({ leads, onEdit, onMessage, onRefresh }: Props) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
   async function handleStatusChange(lead: Lead, newStatus: string) {
+    setUpdatingId(lead.id);
     await fetch(`/api/leads/${lead.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
     });
-    onRefresh();
+    await onRefresh();
+    setUpdatingId(null);
   }
 
   async function handleDelete(id: string) {
+    setDeletingId(id);
     await fetch(`/api/leads/${id}`, { method: "DELETE" });
-    onRefresh();
-  }
-
-  if (leads.length === 0) {
-    return (
-      <div className="text-center py-16 text-zinc-500">
-        No leads yet. Add your first one.
-      </div>
-    );
+    await onRefresh();
+    setDeletingId(null);
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-800">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-zinc-800 bg-zinc-900/50">
-            <th className="text-left px-4 py-3 font-medium text-zinc-400">Company</th>
-            <th className="text-left px-4 py-3 font-medium text-zinc-400">Niche</th>
-            <th className="text-left px-4 py-3 font-medium text-zinc-400">Instagram</th>
-            <th className="text-center px-4 py-3 font-medium text-zinc-400">Brand</th>
-            <th className="text-center px-4 py-3 font-medium text-zinc-400">Content</th>
-            <th className="text-center px-4 py-3 font-medium text-zinc-400">Revenue</th>
-            <th className="text-center px-4 py-3 font-medium text-zinc-400">Priority</th>
-            <th className="text-left px-4 py-3 font-medium text-zinc-400">Status</th>
-            <th className="text-right px-4 py-3 font-medium text-zinc-400">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leads.map((lead) => (
-            <tr
-              key={lead.id}
-              className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors"
-            >
-              <td className="px-4 py-3 font-medium">{lead.companyName}</td>
-              <td className="px-4 py-3 text-zinc-400">{lead.niche}</td>
-              <td className="px-4 py-3 text-indigo-400">{lead.instagramHandle}</td>
-              <td className="px-4 py-3 text-center">
-                <ScoreBadge score={lead.brandScore} />
-              </td>
-              <td className="px-4 py-3 text-center">
-                <ScoreBadge score={lead.contentScore} />
-              </td>
-              <td className="px-4 py-3 text-center">
-                <ScoreBadge score={lead.revenueScore} />
-              </td>
-              <td className="px-4 py-3 text-center">
-                {isHighOpp(lead) ? (
-                  <span className="inline-block bg-orange-500 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full tracking-wide">
-                    HIGH OPP
-                  </span>
-                ) : (
-                  <span className="text-zinc-600">—</span>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <select
-                  value={lead.status}
-                  onChange={(e) => handleStatusChange(lead, e.target.value)}
-                  className={`text-xs rounded-full px-3 py-1 border-0 cursor-pointer ${statusColors[lead.status] || statusColors.new} bg-opacity-100`}
-                  style={{ appearance: "auto" }}
-                >
-                  <option value="new">new</option>
-                  <option value="contacted">contacted</option>
-                  <option value="replied">replied</option>
-                  <option value="booked">booked</option>
-                  <option value="closed">closed</option>
-                </select>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => onMessage(lead)}
-                    className="text-xs px-3 py-1.5 bg-indigo-600/20 text-indigo-400 rounded-lg hover:bg-indigo-600/30 transition-colors"
-                    title="Generate outreach message"
-                  >
-                    Outreach
-                  </button>
-                  <button
-                    onClick={() => onEdit(lead)}
-                    className="text-xs px-3 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg hover:bg-zinc-700 transition-colors"
-                    title="Edit lead"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(lead.id)}
-                    className="text-xs px-2 py-1.5 text-zinc-600 hover:text-red-400 transition-colors"
-                    title="Delete lead"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </td>
+    <>
+      {/* ── Desktop table ────────────────────────────── */}
+      <div className="hidden md:block overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-900/30">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-800/80">
+              <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Company</th>
+              <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Niche</th>
+              <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Instagram</th>
+              <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Brand</th>
+              <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Content</th>
+              <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Revenue</th>
+              <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Priority</th>
+              <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+              <th className="text-right px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/50">
+            {leads.map((lead) => (
+              <tr
+                key={lead.id}
+                className={`hover:bg-zinc-800/30 transition-colors duration-100 ${
+                  deletingId === lead.id ? "opacity-40" : ""
+                } ${updatingId === lead.id ? "opacity-60" : ""}`}
+              >
+                <td className="px-5 py-3.5 font-medium text-zinc-100">{lead.companyName}</td>
+                <td className="px-5 py-3.5 text-zinc-400">{lead.niche}</td>
+                <td className="px-5 py-3.5 text-indigo-400 font-mono text-xs">{lead.instagramHandle}</td>
+                <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.brandScore} /></td>
+                <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.contentScore} /></td>
+                <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.revenueScore} /></td>
+                <td className="px-5 py-3.5 text-center">
+                  {isHighOpp(lead) ? (
+                    <span className="inline-block bg-orange-500/15 text-orange-400 text-[10px] font-bold px-2.5 py-1 rounded-lg tracking-wide uppercase">
+                      High Opp
+                    </span>
+                  ) : (
+                    <span className="text-zinc-700">--</span>
+                  )}
+                </td>
+                <td className="px-5 py-3.5">
+                  <select
+                    value={lead.status}
+                    onChange={(e) => handleStatusChange(lead, e.target.value)}
+                    className={`text-xs font-medium rounded-lg px-3 py-1.5 border-0 cursor-pointer appearance-none ${
+                      statusColors[lead.status] || statusColors.new
+                    }`}
+                  >
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="replied">Replied</option>
+                    <option value="booked">Booked</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </td>
+                <td className="px-5 py-3.5 text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => onMessage(lead)}
+                      className="text-xs px-3 py-1.5 text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors duration-100"
+                    >
+                      Outreach
+                    </button>
+                    <button
+                      onClick={() => onEdit(lead)}
+                      className="text-xs px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 rounded-lg transition-colors duration-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(lead.id)}
+                      disabled={deletingId === lead.id}
+                      className="text-xs px-2 py-1.5 text-zinc-600 hover:text-red-400 transition-colors duration-100 disabled:opacity-30"
+                    >
+                      {deletingId === lead.id ? (
+                        <span className="inline-block w-3 h-3 border border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Mobile cards ─────────────────────────────── */}
+      <div className="md:hidden space-y-3">
+        {leads.map((lead) => (
+          <div
+            key={lead.id}
+            className={`bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 transition-opacity duration-150 ${
+              deletingId === lead.id ? "opacity-40" : ""
+            }`}
+          >
+            {/* Header row */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-zinc-100 truncate">{lead.companyName}</h3>
+                  {isHighOpp(lead) && (
+                    <span className="shrink-0 bg-orange-500/15 text-orange-400 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                      High Opp
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-zinc-500">{lead.niche}</span>
+                  <span className="text-xs text-indigo-400 font-mono">{lead.instagramHandle}</span>
+                </div>
+              </div>
+              <select
+                value={lead.status}
+                onChange={(e) => handleStatusChange(lead, e.target.value)}
+                className={`text-[11px] font-medium rounded-lg px-2.5 py-1 border-0 cursor-pointer appearance-none shrink-0 ${
+                  statusColors[lead.status] || statusColors.new
+                }`}
+              >
+                <option value="new">New</option>
+                <option value="contacted">Contacted</option>
+                <option value="replied">Replied</option>
+                <option value="booked">Booked</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+
+            {/* Scores */}
+            <div className="flex items-center gap-4 text-xs text-zinc-500 mb-3">
+              <span>Brand <ScoreBadge score={lead.brandScore} /></span>
+              <span>Content <ScoreBadge score={lead.contentScore} /></span>
+              <span>Revenue <ScoreBadge score={lead.revenueScore} /></span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/50">
+              <button
+                onClick={() => onMessage(lead)}
+                className="flex-1 text-xs py-2 text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors text-center font-medium"
+              >
+                Outreach
+              </button>
+              <button
+                onClick={() => onEdit(lead)}
+                className="flex-1 text-xs py-2 text-zinc-400 hover:bg-zinc-800 rounded-lg transition-colors text-center font-medium"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDelete(lead.id)}
+                disabled={deletingId === lead.id}
+                className="px-3 py-2 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-30"
+              >
+                {deletingId === lead.id ? (
+                  <span className="inline-block w-3 h-3 border border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

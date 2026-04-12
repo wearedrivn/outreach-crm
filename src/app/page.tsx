@@ -16,10 +16,10 @@ export default async function Home() {
   });
 
   return (
-    <main className="flex-1 px-6 py-8 max-w-7xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-8">
+    <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-10 max-w-7xl mx-auto w-full animate-fade-in">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 sm:mb-10">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">
             Outreach CRM
           </h1>
           <p className="text-zinc-500 text-sm mt-1">
@@ -27,7 +27,7 @@ export default async function Home() {
           </p>
         </div>
         <SignOutButton />
-      </div>
+      </header>
       <Dashboard initialLeads={leads} />
     </main>
   );
