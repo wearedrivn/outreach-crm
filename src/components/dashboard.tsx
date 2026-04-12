@@ -6,6 +6,7 @@ import { LeadsTable } from "./leads-table";
 import { LeadForm } from "./lead-form";
 import { MessageModal } from "./message-modal";
 import { CSVImportModal } from "./csv-import-modal";
+import { Analytics } from "./analytics";
 
 type Props = {
   initialLeads: Lead[];
@@ -91,6 +92,9 @@ export function Dashboard({ initialLeads }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Analytics */}
+      <Analytics leads={leads} />
 
       {/* Empty state */}
       {sorted.length === 0 && !filterHighOpp && (
