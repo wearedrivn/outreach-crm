@@ -5,6 +5,7 @@ import type { Lead } from "@prisma/client";
 import { LeadsTable } from "./leads-table";
 import { LeadForm } from "./lead-form";
 import { MessageModal } from "./message-modal";
+import { CSVImportModal } from "./csv-import-modal";
 
 type Props = {
   initialLeads: Lead[];
@@ -16,6 +17,7 @@ export function Dashboard({ initialLeads }: Props) {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [messageLead, setMessageLead] = useState<Lead | null>(null);
   const [filterHighOpp, setFilterHighOpp] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   async function refreshLeads() {
     const res = await fetch("/api/leads");
@@ -66,15 +68,28 @@ export function Dashboard({ initialLeads }: Props) {
             {sorted.length} lead{sorted.length !== 1 && "s"}
           </span>
         </div>
-        <button
-          onClick={() => {
-            setEditingLead(null);
-            setShowForm(true);
-          }}
-          className="text-sm px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium rounded-xl transition-all duration-150 shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20"
-        >
-          + Add Lead
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Import CSV
+          </button>
+          <button
+            onClick={() => {
+              setEditingLead(null);
+              setShowForm(true);
+            }}
+            className="text-sm px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium rounded-xl transition-all duration-150 shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20"
+          >
+            + Add Lead
+          </button>
+        </div>
       </div>
 
       {/* Empty state */}
@@ -115,6 +130,13 @@ export function Dashboard({ initialLeads }: Props) {
 
       {messageLead && (
         <MessageModal lead={messageLead} onClose={() => setMessageLead(null)} />
+      )}
+
+      {showImport && (
+        <CSVImportModal
+          onClose={() => setShowImport(false)}
+          onImported={refreshLeads}
+        />
       )}
     </div>
   );
