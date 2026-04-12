@@ -3,9 +3,17 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
+  // NextAuth v5 uses "authjs.session-token" on HTTP and
+  // "__Secure-authjs.session-token" on HTTPS. We must tell getToken
+  // whether the request is secure so it looks for the right cookie.
+  const secureCookie =
+    request.url.startsWith("https://") ||
+    request.headers.get("x-forwarded-proto") === "https";
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
+    secureCookie,
   });
 
   if (!token) {
@@ -21,6 +29,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|register|api/auth|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login|register|api/auth|api/diag|_next/static|_next/image|favicon.ico).*)",
   ],
 };
