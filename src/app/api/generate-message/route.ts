@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateOutreach, generateFollowUp } from "@/lib/messages";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -41,14 +41,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY is not configured." },
-      { status: 500 },
-    );
-  }
-
   let body: RequestBody;
   try {
     body = await request.json();
@@ -69,7 +61,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lead not found." }, { status: 404 });
   }
 
-  // Map revenueScore to a human-readable level
+  // ── Fallback: use template engine when no API key is set ──
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    const message =
+      type === "followup" ? generateFollowUp(lead) : generateOutreach(lead);
+    return NextResponse.json({ message, source: "template" });
+  }
+
+  // ── Claude API path ──
+  // Dynamic import so the SDK isn't loaded when not needed
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+
   let revenueLevel = "moderate";
   if (lead.revenueScore >= 8) revenueLevel = "high (7-8 figures)";
   else if (lead.revenueScore >= 6) revenueLevel = "solid (mid 6 figures+)";
@@ -111,16 +114,15 @@ Notes: ${lead.notes || "none"}`;
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    // Extract text from the response
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json(
-        { error: "No text in Claude response." },
-        { status: 502 },
-      );
+      // Fall back to templates if Claude returns no text
+      const message =
+        type === "followup" ? generateFollowUp(lead) : generateOutreach(lead);
+      return NextResponse.json({ message, source: "template" });
     }
 
-    return NextResponse.json({ message: textBlock.text.trim() });
+    return NextResponse.json({ message: textBlock.text.trim(), source: "claude" });
   } catch (err) {
     const e = err as Error & { status?: number };
     console.error("[generate-message] Claude API error:", {
@@ -129,22 +131,9 @@ Notes: ${lead.notes || "none"}`;
       status: e.status,
     });
 
-    if (e.status === 401) {
-      return NextResponse.json(
-        { error: "Invalid ANTHROPIC_API_KEY." },
-        { status: 500 },
-      );
-    }
-    if (e.status === 429) {
-      return NextResponse.json(
-        { error: "Rate limited. Try again in a moment." },
-        { status: 429 },
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to generate message. Try again." },
-      { status: 502 },
-    );
+    // On any Claude API failure, fall back to templates instead of erroring
+    const message =
+      type === "followup" ? generateFollowUp(lead) : generateOutreach(lead);
+    return NextResponse.json({ message, source: "template" });
   }
 }
