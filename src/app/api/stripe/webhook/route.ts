@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!,
@@ -35,15 +35,16 @@ export async function POST(request: Request) {
       }
 
       const subscriptionId = session.subscription as string;
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
 
+      const item = subscription.items.data[0];
       await prisma.user.update({
         where: { id: userId },
         data: {
           stripeCustomerId: session.customer as string,
           stripeSubscriptionId: subscriptionId,
-          stripePriceId: subscription.items.data[0]?.price.id || null,
-          stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          stripePriceId: item?.price.id || null,
+          stripeCurrentPeriodEnd: item ? new Date(item.current_period_end * 1000) : null,
         },
       });
 
@@ -55,11 +56,12 @@ export async function POST(request: Request) {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
 
+      const updatedItem = subscription.items.data[0];
       await prisma.user.updateMany({
         where: { stripeCustomerId: customerId },
         data: {
-          stripePriceId: subscription.items.data[0]?.price.id || null,
-          stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          stripePriceId: updatedItem?.price.id || null,
+          stripeCurrentPeriodEnd: updatedItem ? new Date(updatedItem.current_period_end * 1000) : null,
         },
       });
 
