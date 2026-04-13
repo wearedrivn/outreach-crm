@@ -18,6 +18,8 @@ export async function GET() {
       name: true,
       email: true,
       role: true,
+      plan: true,
+      proExpiresAt: true,
       createdAt: true,
       _count: { select: { leads: true } },
     },

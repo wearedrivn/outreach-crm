@@ -16,24 +16,39 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { role } = body as { role: string };
+  const { role, plan } = body as { role?: string; plan?: string };
 
-  if (!["USER", "ADMIN"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+  const data: Record<string, unknown> = {};
+
+  if (role !== undefined) {
+    if (!["USER", "ADMIN"].includes(role)) {
+      return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+    }
+    // Prevent removing your own admin role
+    if (id === admin.id && role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Cannot remove your own admin role." },
+        { status: 400 },
+      );
+    }
+    data.role = role;
   }
 
-  // Prevent removing your own admin role
-  if (id === admin.id && role !== "ADMIN") {
-    return NextResponse.json(
-      { error: "Cannot remove your own admin role." },
-      { status: 400 },
-    );
+  if (plan !== undefined) {
+    if (!["FREE", "PRO"].includes(plan)) {
+      return NextResponse.json({ error: "Invalid plan." }, { status: 400 });
+    }
+    data.plan = plan;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "No fields to update." }, { status: 400 });
   }
 
   const user = await prisma.user.update({
     where: { id },
-    data: { role: role as "USER" | "ADMIN" },
-    select: { id: true, name: true, role: true },
+    data,
+    select: { id: true, name: true, role: true, plan: true },
   });
 
   return NextResponse.json(user);

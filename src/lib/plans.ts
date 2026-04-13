@@ -16,7 +16,8 @@ export async function getUserPlan(userId: string): Promise<UserPlan> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      stripeCurrentPeriodEnd: true,
+      plan: true,
+      proExpiresAt: true,
       urlToLeadUsage: true,
       _count: { select: { leads: true } },
     },
@@ -33,9 +34,12 @@ export async function getUserPlan(userId: string): Promise<UserPlan> {
     };
   }
 
+  // Plan field is the source of truth.
+  // If plan is PRO, user has Pro access.
+  // If plan is FREE but proExpiresAt is set and in the future, user still has Pro access.
   const isPro =
-    user.stripeCurrentPeriodEnd !== null &&
-    user.stripeCurrentPeriodEnd > new Date();
+    user.plan === "PRO" ||
+    (user.proExpiresAt !== null && user.proExpiresAt > new Date());
 
   const leadCount = user._count.leads;
 

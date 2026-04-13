@@ -7,6 +7,8 @@ type User = {
   name: string;
   email: string;
   role: string;
+  plan: "FREE" | "PRO";
+  proExpiresAt: string | null;
   createdAt: string;
   _count: { leads: number };
 };
@@ -16,6 +18,7 @@ export function AdminUsers({ onRefresh }: { onRefresh: () => void }) {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<string | null>(null);
 
   async function loadUsers() {
     setLoading(true);
@@ -41,6 +44,23 @@ export function AdminUsers({ onRefresh }: { onRefresh: () => void }) {
       onRefresh();
     }
     setActionId(null);
+  }
+
+  async function togglePlan(user: User) {
+    setActionId(user.id);
+    const newPlan = user.plan === "PRO" ? "FREE" : "PRO";
+    const res = await fetch(`/api/admin/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: newPlan }),
+    });
+
+    if (res.ok) {
+      await loadUsers();
+      onRefresh();
+    }
+    setActionId(null);
+    setConfirmPlan(null);
   }
 
   async function deleteUser(id: string) {
@@ -71,6 +91,7 @@ export function AdminUsers({ onRefresh }: { onRefresh: () => void }) {
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
               <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+              <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Plan</th>
               <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Leads</th>
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Joined</th>
               <th className="text-right px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
@@ -94,6 +115,41 @@ export function AdminUsers({ onRefresh }: { onRefresh: () => void }) {
                   >
                     {user.role}
                   </span>
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  {confirmPlan === user.id ? (
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => togglePlan(user)}
+                        disabled={actionId === user.id}
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wide transition-colors disabled:opacity-30 ${
+                          user.plan === "PRO"
+                            ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                            : "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                        }`}
+                      >
+                        {user.plan === "PRO" ? "Confirm Free" : "Confirm Pro"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmPlan(null)}
+                        className="text-[10px] px-1.5 py-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmPlan(user.id)}
+                      disabled={actionId === user.id}
+                      className={`inline-block text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wide transition-colors disabled:opacity-30 ${
+                        user.plan === "PRO"
+                          ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                          : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                      }`}
+                    >
+                      {user.plan === "PRO" ? "Pro" : "Free"}
+                    </button>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-center text-zinc-400 tabular-nums">{user._count.leads}</td>
                 <td className="px-5 py-3.5 text-zinc-500 text-xs">
