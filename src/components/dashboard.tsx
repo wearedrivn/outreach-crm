@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Lead } from "@prisma/client";
+import type { UserPlan } from "@/lib/plans";
 import { LeadsTable } from "./leads-table";
 import { LeadForm } from "./lead-form";
 import { MessageModal } from "./message-modal";
@@ -10,9 +11,10 @@ import { Analytics } from "./analytics";
 
 type Props = {
   initialLeads: Lead[];
+  plan: UserPlan;
 };
 
-export function Dashboard({ initialLeads }: Props) {
+export function Dashboard({ initialLeads, plan }: Props) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [showForm, setShowForm] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -81,17 +83,31 @@ export function Dashboard({ initialLeads }: Props) {
             </svg>
             URL to Lead
           </a>
-          <a
-            href="/bulk-import"
-            className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
-              <path d="M16 16l-4-4-4 4" />
-              <path d="M12 12v9" />
-              <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
-            </svg>
-            Bulk Import
-          </a>
+          {plan.canBulkImport ? (
+            <a
+              href="/bulk-import"
+              className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+                <path d="M16 16l-4-4-4 4" />
+                <path d="M12 12v9" />
+                <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+              </svg>
+              Bulk Import
+            </a>
+          ) : (
+            <span
+              className="text-sm px-3.5 py-2.5 bg-zinc-900/50 text-zinc-600 border border-zinc-800/50 font-medium rounded-xl flex items-center gap-1.5 cursor-not-allowed"
+              title="Pro feature"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+                <path d="M16 16l-4-4-4 4" />
+                <path d="M12 12v9" />
+                <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+              </svg>
+              Bulk Import
+            </span>
+          )}
           <button
             onClick={() => setShowImport(true)}
             className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
