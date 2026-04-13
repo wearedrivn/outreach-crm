@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getUserPlan } from "@/lib/plans";
 import { extractLeadFromURL } from "@/lib/url-extract";
 import { NextResponse } from "next/server";
 
@@ -9,6 +10,14 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const plan = await getUserPlan(session.user.id);
+  if (plan.urlToLeadRemaining <= 0) {
+    return NextResponse.json(
+      { error: "You've used all 5 free URL-to-lead extractions. Upgrade to Pro for unlimited use.", upgrade: true },
+      { status: 403 },
+    );
   }
 
   let body: { url: string };
@@ -60,6 +69,14 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+    }
+
+    // Increment URL-to-lead usage for free users
+    if (plan.plan === "free") {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { urlToLeadUsage: { increment: 1 } },
+      });
     }
 
     return NextResponse.json({ extracted });

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getUserPlan } from "@/lib/plans";
 import { generateOutreach, generateFollowUp } from "@/lib/messages";
 import { NextResponse } from "next/server";
 
@@ -39,6 +40,14 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const plan = await getUserPlan(session.user.id);
+  if (!plan.canUseAI) {
+    return NextResponse.json(
+      { error: "AI message generation is a Pro feature. Upgrade to Pro to unlock it.", upgrade: true },
+      { status: 403 },
+    );
   }
 
   let body: RequestBody;
