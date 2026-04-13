@@ -81,6 +81,17 @@ export function Dashboard({ initialLeads }: Props) {
             </svg>
             URL to Lead
           </a>
+          <a
+            href="/bulk-import"
+            className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+              <path d="M16 16l-4-4-4 4" />
+              <path d="M12 12v9" />
+              <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+            </svg>
+            Bulk Import
+          </a>
           <button
             onClick={() => setShowImport(true)}
             className="text-sm px-3.5 py-2.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 font-medium rounded-xl transition-all duration-150 flex items-center gap-1.5"
