@@ -11,6 +11,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("[stripe-portal] STRIPE_SECRET_KEY is not set");
+    return NextResponse.json(
+      { error: "Stripe is not configured. Contact support." },
+      { status: 500 },
+    );
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { stripeCustomerId: true },
@@ -22,10 +30,23 @@ export async function POST(request: Request) {
 
   const origin = request.headers.get("origin") || "http://localhost:3000";
 
-  const portalSession = await getStripe().billingPortal.sessions.create({
-    customer: user.stripeCustomerId,
-    return_url: `${origin}/pricing`,
-  });
+  try {
+    const portalSession = await getStripe().billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${origin}/pricing`,
+    });
 
-  return NextResponse.json({ url: portalSession.url });
+    return NextResponse.json({ url: portalSession.url });
+  } catch (err) {
+    const e = err as Error & { type?: string; statusCode?: number };
+    console.error("[stripe-portal] Failed to create portal session:", {
+      message: e.message,
+      type: e.type,
+      statusCode: e.statusCode,
+    });
+    return NextResponse.json(
+      { error: e.message || "Failed to create portal session." },
+      { status: 500 },
+    );
+  }
 }

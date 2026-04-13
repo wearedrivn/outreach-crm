@@ -8,43 +8,66 @@ type Props = {
 
 export function PricingCards({ currentPlan }: Props) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleUpgrade() {
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/stripe/checkout", { method: "POST" });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setError(`Server returned ${res.status}. Check Stripe configuration.`);
+        setLoading(false);
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Something went wrong");
+        setError(data.error || "Failed to start checkout.");
         setLoading(false);
       }
-    } catch {
-      alert("Network error. Please try again.");
+    } catch (err) {
+      setError(`Network error: ${(err as Error).message}`);
       setLoading(false);
     }
   }
 
   async function handleManage() {
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setError(`Server returned ${res.status}. Check Stripe configuration.`);
+        setLoading(false);
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Something went wrong");
+        setError(data.error || "Failed to open billing portal.");
         setLoading(false);
       }
-    } catch {
-      alert("Network error. Please try again.");
+    } catch (err) {
+      setError(`Network error: ${(err as Error).message}`);
       setLoading(false);
     }
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up">
+    <div className="space-y-4 animate-slide-up">
+      {error && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-5 py-4 animate-scale-in">
+          {error}
+        </div>
+      )}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Free plan */}
       <div className={`bg-zinc-900/50 border rounded-2xl p-6 ${currentPlan === "free" ? "border-zinc-700" : "border-zinc-800/80"}`}>
         {currentPlan === "free" && (
@@ -138,6 +161,7 @@ export function PricingCards({ currentPlan }: Props) {
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }
