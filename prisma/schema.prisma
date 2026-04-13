@@ -19,6 +19,11 @@ model User {
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   leads        Lead[]
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?
+  stripePriceId          String?
+  stripeCurrentPeriodEnd DateTime?
+  urlToLeadUsage         Int       @default(0)
 }
 
 model Lead {
