@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) redirect("/landing");
 
   const [leads, currentUser] = await Promise.all([
     prisma.lead.findMany({
