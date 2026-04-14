@@ -1,10 +1,7 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
-import bcrypt from "bcryptjs";
-import { createOtp } from "@/lib/otp";
-import { sendOtpEmail } from "@/lib/email";
+import { signIn } from "@/lib/auth";
+import { AuthError } from "next-auth";
 
 export type LoginState = {
   error: string | null;
@@ -21,35 +18,38 @@ export async function loginAction(
     return { error: "Email and password are required." };
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-
-  const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true, email: true, passwordHash: true },
-  });
-
-  if (!user) {
-    return { error: "Invalid email or password." };
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    return { error: "Invalid email or password." };
-  }
-
-  // Generate OTP
-  const code = await createOtp(user.id);
-  if (!code) {
-    return { error: "Please wait before requesting a new code." };
-  }
-
-  // Send email
   try {
-    await sendOtpEmail(user.email, code);
-  } catch (err) {
-    console.error("[loginAction] Failed to send OTP email:", (err as Error).message);
-    return { error: "Failed to send verification email. Please try again." };
-  }
+    await signIn("credentials", {
+      email,
+      password,
+      redirectTo: "/",
+    });
+    return { error: null };
+  } catch (e) {
+    if (
+      e &&
+      typeof e === "object" &&
+      "digest" in e &&
+      typeof (e as { digest?: string }).digest === "string" &&
+      (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
 
-  redirect(`/verify-otp?uid=${user.id}`);
+    if (e instanceof AuthError) {
+      console.error("[loginAction] AuthError:", e.type, e.message);
+      if (e.type === "CredentialsSignin") {
+        return { error: "Invalid email or password." };
+      }
+      return { error: `Auth error: ${e.type}` };
+    }
+
+    const err = e as Error;
+    console.error("[loginAction] Unknown error:", {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+    return { error: `Login crashed: ${err.message}` };
+  }
 }
