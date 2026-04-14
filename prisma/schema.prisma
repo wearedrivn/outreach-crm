@@ -26,11 +26,25 @@ model User {
   proExpiresAt DateTime?
   createdAt    DateTime @default(now())
   leads        Lead[]
+  otps         Otp[]
   stripeCustomerId       String?   @unique
   stripeSubscriptionId   String?
   stripePriceId          String?
   stripeCurrentPeriodEnd DateTime?
   urlToLeadUsage         Int       @default(0)
+}
+
+model Otp {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 model Lead {

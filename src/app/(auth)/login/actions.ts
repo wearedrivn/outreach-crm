@@ -1,7 +1,6 @@
 "use server";
 
-import { signIn } from "@/lib/auth";
-import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 
 export type LoginState = {
   error: string | null;
@@ -18,40 +17,32 @@ export async function loginAction(
     return { error: "Email and password are required." };
   }
 
+  // Call our OTP send endpoint (server-to-server, using absolute URL construction)
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
+  let res: Response;
   try {
-    await signIn("credentials", {
-      email,
-      password,
-      redirectTo: "/",
+    res = await fetch(`${baseUrl}/api/auth/otp/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
-    return { error: null };
-  } catch (e) {
-    // NextAuth throws a NEXT_REDIRECT when signIn succeeds — let it propagate
-    // so Next.js performs the redirect. Only catch real auth errors.
-    if (
-      e &&
-      typeof e === "object" &&
-      "digest" in e &&
-      typeof (e as { digest?: string }).digest === "string" &&
-      (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
-    ) {
-      throw e;
-    }
-
-    if (e instanceof AuthError) {
-      console.error("[loginAction] AuthError:", e.type, e.message);
-      if (e.type === "CredentialsSignin") {
-        return { error: "Invalid email or password." };
-      }
-      return { error: `Auth error: ${e.type}` };
-    }
-
-    const err = e as Error;
-    console.error("[loginAction] Unknown error:", {
-      name: err.name,
-      message: err.message,
-      stack: err.stack,
-    });
-    return { error: `Login crashed: ${err.message}` };
+  } catch (err) {
+    console.error("[loginAction] fetch error:", (err as Error).message);
+    return { error: "Service unavailable. Please try again." };
   }
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    if (data.cooldown) {
+      return { error: "Please wait before requesting a new code." };
+    }
+    return { error: data.error || "Invalid email or password." };
+  }
+
+  // Redirect to OTP verification page with userId
+  redirect(`/verify-otp?uid=${data.userId}`);
 }
