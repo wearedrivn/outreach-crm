@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     const emailLog = await prisma.emailLog.create({
       data: {
         leadId: lead.id,
+        userId: session.user.id,
         subject,
         body: emailBody,
         status: "sent",
@@ -69,13 +70,14 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update lead status to "contacted" if it's still "new"
-    if (lead.status === "new") {
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { status: "contacted" },
-      });
-    }
+    // Update lead status and lastContactedAt
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        lastContactedAt: new Date(),
+        ...(lead.status === "new" ? { status: "contacted" } : {}),
+      },
+    });
 
     // Start email sequence if requested
     if (startSequence) {

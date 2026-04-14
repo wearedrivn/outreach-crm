@@ -7,6 +7,7 @@ import { LeadsTable } from "./leads-table";
 import { LeadForm } from "./lead-form";
 import { MessageModal } from "./message-modal";
 import { CSVImportModal } from "./csv-import-modal";
+import { BulkSendModal } from "./bulk-send-modal";
 import { Analytics } from "./analytics";
 
 type Props = {
@@ -21,6 +22,8 @@ export function Dashboard({ initialLeads, plan }: Props) {
   const [messageLead, setMessageLead] = useState<Lead | null>(null);
   const [filterHighOpp, setFilterHighOpp] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkSend, setShowBulkSend] = useState(false);
 
   async function refreshLeads() {
     const res = await fetch("/api/leads");
@@ -36,6 +39,28 @@ export function Dashboard({ initialLeads, plan }: Props) {
   function handleFormClose() {
     setShowForm(false);
     setEditingLead(null);
+    refreshLeads();
+  }
+
+  async function handleBulkSend(opts: { skipContacted: boolean; startSequence: boolean }) {
+    const res = await fetch("/api/email/bulk-send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        leadIds: Array.from(selectedIds),
+        skipContacted: opts.skipContacted,
+        startSequence: opts.startSequence,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || "Bulk send failed");
+    }
+    return res.json();
+  }
+
+  function handleBulkDone() {
+    setSelectedIds(new Set());
     refreshLeads();
   }
 
@@ -131,6 +156,32 @@ export function Dashboard({ initialLeads, plan }: Props) {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 animate-scale-in">
+          <span className="text-sm text-indigo-300 font-medium">
+            {selectedIds.size} lead{selectedIds.size !== 1 && "s"} selected
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={() => setShowBulkSend(true)}
+            className="text-sm px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-500 transition-colors flex items-center gap-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
+            Bulk Send Email
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-sm px-3 py-2 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Analytics */}
       <Analytics leads={leads} />
 
@@ -160,6 +211,8 @@ export function Dashboard({ initialLeads, plan }: Props) {
       {sorted.length > 0 && (
         <LeadsTable
           leads={sorted}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           onEdit={handleEdit}
           onMessage={setMessageLead}
           onRefresh={refreshLeads}
@@ -178,6 +231,15 @@ export function Dashboard({ initialLeads, plan }: Props) {
         <CSVImportModal
           onClose={() => setShowImport(false)}
           onImported={refreshLeads}
+        />
+      )}
+
+      {showBulkSend && (
+        <BulkSendModal
+          selectedCount={selectedIds.size}
+          onClose={() => setShowBulkSend(false)}
+          onSend={handleBulkSend}
+          onDone={handleBulkDone}
         />
       )}
     </div>

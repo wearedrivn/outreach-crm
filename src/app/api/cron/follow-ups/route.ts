@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       const lead = seq.lead;
 
       // Skip leads with no email or inactive statuses
-      if (!lead.email || SKIP_STATUSES.includes(lead.status)) {
+      if (!lead.email || lead.unsubscribed || SKIP_STATUSES.includes(lead.status)) {
         await prisma.emailSequence.update({
           where: { id: seq.id },
           data: { pausedAt: now },
@@ -58,12 +58,18 @@ export async function GET(request: Request) {
         await prisma.emailLog.create({
           data: {
             leadId: lead.id,
+            userId: lead.userId,
             subject,
             body,
             status: "sent",
             providerMessageId: result.id,
             sequenceStep: 2,
           },
+        });
+
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { lastContactedAt: now },
         });
 
         await prisma.emailSequence.update({
@@ -93,7 +99,7 @@ export async function GET(request: Request) {
     for (const seq of dueStep3) {
       const lead = seq.lead;
 
-      if (!lead.email || SKIP_STATUSES.includes(lead.status)) {
+      if (!lead.email || lead.unsubscribed || SKIP_STATUSES.includes(lead.status)) {
         await prisma.emailSequence.update({
           where: { id: seq.id },
           data: { pausedAt: now },
@@ -111,12 +117,18 @@ export async function GET(request: Request) {
         await prisma.emailLog.create({
           data: {
             leadId: lead.id,
+            userId: lead.userId,
             subject,
             body,
             status: "sent",
             providerMessageId: result.id,
             sequenceStep: 3,
           },
+        });
+
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { lastContactedAt: now },
         });
 
         await prisma.emailSequence.update({

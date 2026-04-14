@@ -57,43 +57,82 @@ model Lead {
   brandScore      Int      @default(5)
   contentScore    Int      @default(5)
   revenueScore    Int      @default(5)
-  status          String   @default("new")
-  notes           String   @default("")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status          String    @default("new")
+  notes           String    @default("")
+  lastContactedAt DateTime?
+  unsubscribed    Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
   emailLogs       EmailLog[]
   emailSequence   EmailSequence?
 }
 
 model EmailLog {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   leadId            String
-  lead              Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead              Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId            String
   subject           String
   body              String
-  status            String   @default("sent")
+  direction         String    @default("outbound")
+  status            String    @default("sent")
   providerMessageId String?
   sequenceStep      Int?
-  sentAt            DateTime @default(now())
+  sentAt            DateTime  @default(now())
+  receivedAt        DateTime?
 
   @@index([leadId, sentAt])
+  @@index([userId])
+  @@index([providerMessageId])
 }
 
 model EmailSequence {
-  id          String    @id @default(cuid())
-  leadId      String    @unique
-  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  currentStep Int       @default(0)
-  startedAt   DateTime  @default(now())
-  pausedAt    DateTime?
-  step1SentAt DateTime?
-  step2DueAt  DateTime?
-  step2SentAt DateTime?
-  step3DueAt  DateTime?
-  step3SentAt DateTime?
+  id           String    @id @default(cuid())
+  leadId       String    @unique
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  templateId   String?
+  template     SequenceTemplate? @relation(fields: [templateId], references: [id])
+  currentStep  Int       @default(0)
+  nextSendAt   DateTime?
+  startedAt    DateTime  @default(now())
+  pausedAt     DateTime?
+  completedAt  DateTime?
+  step1SentAt  DateTime?
+  step2DueAt   DateTime?
+  step2SentAt  DateTime?
+  step3DueAt   DateTime?
+  step3SentAt  DateTime?
 
   @@index([step2DueAt])
   @@index([step3DueAt])
+  @@index([nextSendAt])
+}
+
+model SequenceTemplate {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String    @default("")
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  steps       SequenceTemplateStep[]
+  sequences   EmailSequence[]
+
+  @@index([userId])
+}
+
+model SequenceTemplateStep {
+  id              String           @id @default(cuid())
+  templateId      String
+  template        SequenceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  stepNumber      Int
+  subjectTemplate String
+  bodyTemplate    String
+  delayDays       Int
+  createdAt       DateTime         @default(now())
+
+  @@unique([templateId, stepNumber])
 }

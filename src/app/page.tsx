@@ -39,6 +39,12 @@ export default async function Home() {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            href="/sequences"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
+          >
+            Sequences
+          </Link>
+          <Link
             href="/pricing"
             className="text-xs font-medium px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
           >
