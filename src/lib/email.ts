@@ -13,6 +13,30 @@ function getResend(): Resend {
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Highr <onboarding@resend.dev>";
 
+export async function sendOutreachEmail(
+  to: string,
+  subject: string,
+  body: string,
+): Promise<{ id: string }> {
+  const result = await getResend().emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 40px 20px;">
+        <div style="color: #18181b; font-size: 14px; line-height: 1.7; white-space: pre-line;">
+${body}
+        </div>
+        <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0 16px;" />
+        <p style="color: #a1a1aa; font-size: 11px; margin: 0;">
+          Sent via Highr — Premium Client Acquisition
+        </p>
+      </div>
+    `,
+  });
+  return { id: result.data?.id || "" };
+}
+
 export async function sendOtpEmail(to: string, code: string) {
   await getResend().emails.send({
     from: FROM_EMAIL,

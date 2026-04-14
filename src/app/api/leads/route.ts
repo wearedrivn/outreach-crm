@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       niche: body.niche,
       instagramHandle: body.instagramHandle,
       website: body.website || "",
+      email: body.email || "",
       brandScore: body.brandScore ?? 5,
       contentScore: body.contentScore ?? 5,
       revenueScore: body.revenueScore ?? 5,

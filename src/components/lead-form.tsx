@@ -56,6 +56,7 @@ export function LeadForm({ lead, onClose }: Props) {
       niche: form.get("niche") as string,
       instagramHandle: form.get("instagramHandle") as string,
       website: form.get("website") as string,
+      email: form.get("email") as string,
       brandScore: Number(form.get("brandScore")),
       contentScore: Number(form.get("contentScore")),
       revenueScore: Number(form.get("revenueScore")),
@@ -150,6 +151,17 @@ export function LeadForm({ lead, onClose }: Props) {
                 className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
+            <input
+              name="email"
+              type="email"
+              defaultValue={lead?.email || ""}
+              placeholder="contact@company.com"
+              className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">

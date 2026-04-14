@@ -1,11 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Lead } from "@prisma/client";
+
+type EmailLog = {
+  id: string;
+  subject: string;
+  body: string;
+  status: string;
+  sequenceStep: number | null;
+  sentAt: string;
+};
+
+type EmailSequence = {
+  id: string;
+  currentStep: number;
+  startedAt: string;
+  pausedAt: string | null;
+  step1SentAt: string | null;
+  step2DueAt: string | null;
+  step2SentAt: string | null;
+  step3DueAt: string | null;
+  step3SentAt: string | null;
+};
 
 type Props = {
   lead: Lead;
   onClose: () => void;
+  onRefresh?: () => void;
 };
 
 function SkeletonLines() {
@@ -20,18 +42,52 @@ function SkeletonLines() {
   );
 }
 
-export function MessageModal({ lead, onClose }: Props) {
+type Tab = "compose" | "history";
+
+export function MessageModal({ lead, onClose, onRefresh }: Props) {
+  const [tab, setTab] = useState<Tab>("compose");
   const [message, setMessage] = useState("");
+  const [subject, setSubject] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [messageType, setMessageType] = useState<"outreach" | "followup">("outreach");
   const [source, setSource] = useState<"claude" | "template" | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [startSequence, setStartSequence] = useState(true);
+
+  // History state
+  const [logs, setLogs] = useState<EmailLog[]>([]);
+  const [sequence, setSequence] = useState<EmailSequence | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const hasEmail = Boolean(lead.email);
+
+  useEffect(() => {
+    if (tab === "history") {
+      loadHistory();
+    }
+  }, [tab]);
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/email/history?leadId=${lead.id}`);
+      const data = await res.json();
+      setLogs(data.logs || []);
+      setSequence(data.sequence || null);
+    } catch {
+      // silent
+    }
+    setHistoryLoading(false);
+  }
 
   async function generate(type: "outreach" | "followup") {
     setLoading(true);
     setError("");
     setCopied(false);
+    setSent(false);
     setMessageType(type);
 
     try {
@@ -50,6 +106,11 @@ export function MessageModal({ lead, onClose }: Props) {
 
       setMessage(data.message);
       setSource(data.source || "template");
+      setSubject(
+        type === "outreach"
+          ? `Quick thought on ${lead.companyName}`
+          : `Following up — ${lead.companyName}`,
+      );
     } catch {
       setError("Network error. Try again.");
     } finally {
@@ -61,6 +122,40 @@ export function MessageModal({ lead, onClose }: Props) {
     await navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleSendEmail() {
+    if (!hasEmail || !message || !subject) return;
+
+    setSending(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: lead.id,
+          subject,
+          body: message,
+          startSequence: startSequence && messageType === "outreach",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to send email.");
+        setSending(false);
+        return;
+      }
+
+      setSent(true);
+      onRefresh?.();
+    } catch {
+      setError("Failed to send. Try again.");
+    }
+    setSending(false);
   }
 
   const isHighOpp =
@@ -83,6 +178,9 @@ export function MessageModal({ lead, onClose }: Props) {
             <div className="flex items-center gap-2.5 mt-1">
               <span className="text-xs text-zinc-500">{lead.niche}</span>
               <span className="text-xs text-indigo-400 font-mono">{lead.instagramHandle}</span>
+              {hasEmail && (
+                <span className="text-xs text-zinc-500">{lead.email}</span>
+              )}
             </div>
           </div>
           <button
@@ -96,10 +194,34 @@ export function MessageModal({ lead, onClose }: Props) {
         </div>
 
         {/* Scores bar */}
-        <div className="flex items-center gap-5 px-6 pb-5 text-xs text-zinc-500">
+        <div className="flex items-center gap-5 px-6 pb-4 text-xs text-zinc-500">
           <span>Brand <span className="text-zinc-300 font-medium tabular-nums">{lead.brandScore}/10</span></span>
           <span>Content <span className="text-zinc-300 font-medium tabular-nums">{lead.contentScore}/10</span></span>
           <span>Revenue <span className="text-zinc-300 font-medium tabular-nums">{lead.revenueScore}/10</span></span>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-6 pb-4">
+          <button
+            onClick={() => setTab("compose")}
+            className={`text-xs font-medium px-3.5 py-1.5 rounded-lg transition-colors ${
+              tab === "compose"
+                ? "bg-zinc-800 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Compose
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`text-xs font-medium px-3.5 py-1.5 rounded-lg transition-colors ${
+              tab === "history"
+                ? "bg-zinc-800 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Send History
+          </button>
         </div>
 
         <div className="border-t border-zinc-800/60" />
@@ -112,88 +234,251 @@ export function MessageModal({ lead, onClose }: Props) {
             </div>
           )}
 
-          {/* Initial state — generate buttons */}
-          {!message && !loading && (
-            <div className="text-center py-8 animate-fade-in">
-              <p className="text-zinc-500 text-sm mb-6">
-                Generate a personalized outreach message for {lead.companyName}
-              </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-3">
-                <button
-                  onClick={() => generate("outreach")}
-                  className="text-sm px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150"
-                >
-                  Generate Outreach
-                </button>
-                <button
-                  onClick={() => generate("followup")}
-                  className="text-sm px-5 py-2.5 bg-zinc-800 text-zinc-300 font-medium rounded-xl hover:bg-zinc-700 transition-colors"
-                >
-                  Generate Follow-up
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Loading skeleton */}
-          {loading && (
-            <div className="py-4 animate-fade-in">
-              <div className="text-[11px] uppercase tracking-wider text-zinc-600 font-medium mb-3">
-                {messageType === "outreach" ? "Generating outreach..." : "Generating follow-up..."}
-              </div>
-              <div className="bg-zinc-800/30 rounded-xl p-5 border-l-2 border-indigo-500/30">
-                <SkeletonLines />
-              </div>
-            </div>
-          )}
-
-          {/* Generated message */}
-          {message && !loading && (
-            <div className="animate-fade-in">
-              <div className="text-[11px] uppercase tracking-wider text-indigo-400/80 font-semibold mb-3">
-                {messageType === "outreach" ? "Initial Outreach" : "Follow-up"}
-              </div>
-              <div className="bg-zinc-800/30 border-l-2 border-indigo-500 rounded-xl p-5 text-sm leading-relaxed text-zinc-300 whitespace-pre-line">
-                {message}
-              </div>
-              {source && (
-                <p className="text-[11px] text-zinc-600 mt-2">
-                  {source === "claude" ? "Generated by Claude AI" : "Generated from templates"}
-                </p>
+          {tab === "compose" && (
+            <>
+              {/* Initial state — generate buttons */}
+              {!message && !loading && (
+                <div className="text-center py-8 animate-fade-in">
+                  <p className="text-zinc-500 text-sm mb-6">
+                    Generate a personalized outreach message for {lead.companyName}
+                  </p>
+                  <div className="flex flex-col sm:flex-row justify-center gap-3">
+                    <button
+                      onClick={() => generate("outreach")}
+                      className="text-sm px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150"
+                    >
+                      Generate Outreach
+                    </button>
+                    <button
+                      onClick={() => generate("followup")}
+                      className="text-sm px-5 py-2.5 bg-zinc-800 text-zinc-300 font-medium rounded-xl hover:bg-zinc-700 transition-colors"
+                    >
+                      Generate Follow-up
+                    </button>
+                  </div>
+                </div>
               )}
-              <div className="flex flex-wrap gap-2.5 mt-5">
-                <button
-                  onClick={handleCopy}
-                  className={`text-sm px-4 py-2.5 font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                    copied
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
-                      : "bg-indigo-600 text-white hover:bg-indigo-500 active:bg-indigo-700"
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+
+              {/* Loading skeleton */}
+              {loading && (
+                <div className="py-4 animate-fade-in">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-600 font-medium mb-3">
+                    {messageType === "outreach" ? "Generating outreach..." : "Generating follow-up..."}
+                  </div>
+                  <div className="bg-zinc-800/30 rounded-xl p-5 border-l-2 border-indigo-500/30">
+                    <SkeletonLines />
+                  </div>
+                </div>
+              )}
+
+              {/* Generated message */}
+              {message && !loading && (
+                <div className="animate-fade-in">
+                  <div className="text-[11px] uppercase tracking-wider text-indigo-400/80 font-semibold mb-3">
+                    {messageType === "outreach" ? "Initial Outreach" : "Follow-up"}
+                  </div>
+
+                  {/* Subject line */}
+                  <div className="mb-3">
+                    <label className="block text-[11px] text-zinc-500 mb-1">Subject</label>
+                    <input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-lg px-3 py-2 text-sm text-zinc-100 transition-colors"
+                    />
+                  </div>
+
+                  {/* Message body — editable */}
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={8}
+                    className="w-full bg-zinc-800/30 border border-zinc-800/60 border-l-2 border-l-indigo-500 rounded-xl p-5 text-sm leading-relaxed text-zinc-300 resize-none transition-colors"
+                  />
+                  {source && (
+                    <p className="text-[11px] text-zinc-600 mt-1.5">
+                      {source === "claude" ? "Generated by Claude AI" : "Generated from templates"}
+                    </p>
+                  )}
+
+                  {/* Sequence toggle */}
+                  {hasEmail && messageType === "outreach" && !sent && (
+                    <label className="flex items-center gap-2.5 mt-4 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={startSequence}
+                        onChange={(e) => setStartSequence(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-indigo-500 accent-indigo-500"
+                      />
+                      <span className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors">
+                        Start email sequence (follow-ups at day 3 and day 7)
+                      </span>
+                    </label>
+                  )}
+
+                  {/* Sent confirmation */}
+                  {sent && (
+                    <div className="mt-4 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 animate-scale-in flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      Copied
-                    </>
-                  ) : (
-                    "Copy Message"
+                      Email sent to {lead.email}
+                      {startSequence && messageType === "outreach" && " — sequence started"}
+                    </div>
                   )}
-                </button>
-                <button
-                  onClick={() => generate(messageType)}
-                  className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
-                >
-                  Regenerate
-                </button>
-                <button
-                  onClick={() => generate(messageType === "outreach" ? "followup" : "outreach")}
-                  className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
-                >
-                  {messageType === "outreach" ? "Follow-up" : "Outreach"}
-                </button>
-              </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2.5 mt-5">
+                    {/* Send email button */}
+                    {hasEmail && !sent && (
+                      <button
+                        onClick={handleSendEmail}
+                        disabled={sending || !subject || !message}
+                        className="text-sm px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {sending && (
+                          <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        )}
+                        {sending ? "Sending..." : "Send Email"}
+                      </button>
+                    )}
+
+                    {/* No email warning */}
+                    {!hasEmail && (
+                      <span className="text-xs text-zinc-500 py-2.5">
+                        Add an email to this lead to send directly
+                      </span>
+                    )}
+
+                    <button
+                      onClick={handleCopy}
+                      className={`text-sm px-4 py-2.5 font-medium rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                        copied
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                          : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                      }`}
+                    >
+                      {copied ? (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Copied
+                        </>
+                      ) : (
+                        "Copy"
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { setSent(false); generate(messageType); }}
+                      className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
+                    >
+                      Regenerate
+                    </button>
+                    <button
+                      onClick={() => { setSent(false); generate(messageType === "outreach" ? "followup" : "outreach"); }}
+                      className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
+                    >
+                      {messageType === "outreach" ? "Follow-up" : "Outreach"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === "history" && (
+            <div className="animate-fade-in">
+              {historyLoading && <SkeletonLines />}
+
+              {!historyLoading && logs.length === 0 && (
+                <p className="text-sm text-zinc-500 text-center py-8">
+                  No emails sent to this lead yet.
+                </p>
+              )}
+
+              {/* Sequence status */}
+              {!historyLoading && sequence && (
+                <div className="mb-5 bg-zinc-800/30 border border-zinc-800/60 rounded-xl p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-indigo-400/80 font-semibold mb-3">
+                    Email Sequence
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {[1, 2, 3].map((step) => {
+                      const isSent =
+                        step === 1
+                          ? !!sequence.step1SentAt
+                          : step === 2
+                            ? !!sequence.step2SentAt
+                            : !!sequence.step3SentAt;
+                      const dueAt =
+                        step === 2
+                          ? sequence.step2DueAt
+                          : step === 3
+                            ? sequence.step3DueAt
+                            : null;
+                      const isPaused = !!sequence.pausedAt;
+
+                      return (
+                        <div key={step} className="flex items-center gap-2">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                              isSent
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : isPaused
+                                  ? "bg-zinc-800 text-zinc-600"
+                                  : "bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {isSent ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              step
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-500">
+                            {step === 1 && "Initial"}
+                            {step === 2 && (isSent ? "Day 3 sent" : dueAt ? `Due ${new Date(dueAt).toLocaleDateString()}` : "Day 3")}
+                            {step === 3 && (isSent ? "Day 7 sent" : dueAt ? `Due ${new Date(dueAt).toLocaleDateString()}` : "Day 7")}
+                          </div>
+                          {step < 3 && (
+                            <div className={`w-8 h-px ${isSent ? "bg-emerald-500/40" : "bg-zinc-800"}`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {sequence.pausedAt && (
+                    <p className="text-[11px] text-amber-400 mt-2">Sequence paused (lead status changed)</p>
+                  )}
+                </div>
+              )}
+
+              {/* Email logs */}
+              {!historyLoading && logs.length > 0 && (
+                <div className="space-y-3">
+                  {logs.map((log) => (
+                    <div key={log.id} className="bg-zinc-800/30 border border-zinc-800/60 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-zinc-200 truncate">{log.subject}</span>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {log.sequenceStep && (
+                            <span className="text-[10px] bg-indigo-500/15 text-indigo-400 px-2 py-0.5 rounded-md font-medium">
+                              Step {log.sequenceStep}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-zinc-500">
+                            {new Date(log.sentAt).toLocaleDateString()} {new Date(log.sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-3 whitespace-pre-line">{log.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -66,6 +66,7 @@ export function LeadsTable({ leads, onEdit, onMessage, onRefresh }: Props) {
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Company</th>
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Niche</th>
               <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Instagram</th>
+              <th className="text-left px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
               <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Brand</th>
               <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Content</th>
               <th className="text-center px-5 py-3.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">Revenue</th>
@@ -85,6 +86,7 @@ export function LeadsTable({ leads, onEdit, onMessage, onRefresh }: Props) {
                 <td className="px-5 py-3.5 font-medium text-zinc-100">{lead.companyName}</td>
                 <td className="px-5 py-3.5 text-zinc-400">{lead.niche}</td>
                 <td className="px-5 py-3.5 text-indigo-400 font-mono text-xs">{lead.instagramHandle}</td>
+                <td className="px-5 py-3.5 text-zinc-400 text-xs truncate max-w-[160px]">{lead.email || <span className="text-zinc-700">—</span>}</td>
                 <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.brandScore} /></td>
                 <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.contentScore} /></td>
                 <td className="px-5 py-3.5 text-center"><ScoreBadge score={lead.revenueScore} /></td>
