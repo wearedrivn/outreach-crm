@@ -1,6 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { createOtp } from "@/lib/otp";
+import { sendOtpEmail } from "@/lib/email";
 
 export type LoginState = {
   error: string | null;
@@ -17,32 +21,35 @@ export async function loginAction(
     return { error: "Email and password are required." };
   }
 
-  // Call our OTP send endpoint (server-to-server, using absolute URL construction)
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  const normalizedEmail = email.trim().toLowerCase();
 
-  let res: Response;
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, email: true, passwordHash: true },
+  });
+
+  if (!user) {
+    return { error: "Invalid email or password." };
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    return { error: "Invalid email or password." };
+  }
+
+  // Generate OTP
+  const code = await createOtp(user.id);
+  if (!code) {
+    return { error: "Please wait before requesting a new code." };
+  }
+
+  // Send email
   try {
-    res = await fetch(`${baseUrl}/api/auth/otp/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    await sendOtpEmail(user.email, code);
   } catch (err) {
-    console.error("[loginAction] fetch error:", (err as Error).message);
-    return { error: "Service unavailable. Please try again." };
+    console.error("[loginAction] Failed to send OTP email:", (err as Error).message);
+    return { error: "Failed to send verification email. Please try again." };
   }
 
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    if (data.cooldown) {
-      return { error: "Please wait before requesting a new code." };
-    }
-    return { error: data.error || "Invalid email or password." };
-  }
-
-  // Redirect to OTP verification page with userId
-  redirect(`/verify-otp?uid=${data.userId}`);
+  redirect(`/verify-otp?uid=${user.id}`);
 }
