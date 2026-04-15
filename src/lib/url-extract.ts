@@ -15,6 +15,8 @@ export type ExtractedLead = {
   contactUrl: string;
   aboutUrl: string;
   premiumSignals: string[];
+  email: string;
+  allEmails: string[];
 };
 
 /** Fetch HTML with a 10s timeout and browser-like UA */
@@ -313,6 +315,195 @@ function estimateRevenueScore(text: string, premiumSignals: string[]): number {
   return Math.min(10, Math.max(1, score));
 }
 
+/* ── Email extraction ────────────────────────────────── */
+
+const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/gi;
+
+const BLOCK_EMAIL_LOCALS = [
+  "no-reply", "noreply", "do-not-reply", "donotreply",
+  "mailer-daemon", "postmaster", "bounce", "bounces",
+];
+
+const BLOCK_EMAIL_DOMAINS = [
+  "sentry.io", "sentry.wixpress.com", "wixpress.com",
+  "example.com", "domain.com", "yourdomain.com",
+  "gstatic.com", "cloudflare.com", "w3.org",
+];
+
+function normalizeEmail(e: string): string {
+  return e.trim().toLowerCase().replace(/[.,;:]+$/, "");
+}
+
+function isValidEmail(e: string): boolean {
+  if (!/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(e)) return false;
+  const [local, domain] = e.split("@");
+  if (!local || !domain) return false;
+  if (local.length > 64 || domain.length > 253) return false;
+  // Block obvious junk domains
+  for (const bad of BLOCK_EMAIL_DOMAINS) {
+    if (domain === bad || domain.endsWith("." + bad)) return false;
+  }
+  // Block file-extension false-positives (e.g. "foo@2x.png")
+  if (/\.(png|jpg|jpeg|gif|svg|webp|css|js|ico|woff2?)$/i.test(e)) return false;
+  // Sentry public DSN keys look like emails
+  if (/^[a-f0-9]{20,}$/.test(local)) return false;
+  return true;
+}
+
+function extractEmailsFromHTML(html: string): string[] {
+  const found = new Set<string>();
+
+  // 1. mailto: links
+  const mailtoRe = /mailto:([^"'?\s<>]+)/gi;
+  let m;
+  while ((m = mailtoRe.exec(html)) !== null) {
+    try {
+      const email = normalizeEmail(decodeURIComponent(m[1]));
+      if (isValidEmail(email)) found.add(email);
+    } catch {
+      /* bad encoding, skip */
+    }
+  }
+
+  // 2. JSON-LD structured data
+  const jsonLdRe = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let j;
+  while ((j = jsonLdRe.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(j[1].trim());
+      const walk = (obj: unknown): void => {
+        if (!obj) return;
+        if (typeof obj === "string") {
+          const matches = obj.match(EMAIL_RE);
+          if (matches) {
+            for (const e of matches) {
+              const n = normalizeEmail(e);
+              if (isValidEmail(n)) found.add(n);
+            }
+          }
+          return;
+        }
+        if (Array.isArray(obj)) obj.forEach(walk);
+        else if (typeof obj === "object") Object.values(obj as Record<string, unknown>).forEach(walk);
+      };
+      walk(parsed);
+    } catch {
+      /* malformed JSON-LD, skip */
+    }
+  }
+
+  // 3. Raw regex over text (strip scripts/styles first)
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+  const rawMatches = text.match(EMAIL_RE) || [];
+  for (const e of rawMatches) {
+    const n = normalizeEmail(e);
+    if (isValidEmail(n)) found.add(n);
+  }
+
+  return Array.from(found);
+}
+
+function emailTier(email: string, siteDomain: string): number {
+  const [local, domain] = email.split("@");
+  const localLower = local.toLowerCase();
+
+  // De-prioritize automated/no-reply addresses
+  for (const bad of BLOCK_EMAIL_LOCALS) {
+    if (localLower === bad || localLower.startsWith(bad + "+")) return 99;
+  }
+  if (/^(notify|alert|system|automated|robot|newsletter|unsubscribe|marketing)/i.test(localLower)) {
+    return 90;
+  }
+
+  const onSiteDomain =
+    !!siteDomain && (domain === siteDomain || domain.endsWith("." + siteDomain));
+  if (!onSiteDomain) return 80;
+
+  if (localLower === "hello") return 1;
+  if (localLower === "info") return 2;
+  if (localLower === "contact" || localLower === "contactus") return 3;
+  if (["founder", "founders", "team", "office", "hi", "hey", "sales", "hq"].includes(localLower)) {
+    return 4;
+  }
+  return 5;
+}
+
+function rankEmails(emails: string[], siteDomain: string): string[] {
+  return emails
+    .map((e) => ({ email: e, tier: emailTier(e, siteDomain) }))
+    .sort((a, b) => a.tier - b.tier)
+    .map((x) => x.email);
+}
+
+async function fetchEmailsFromPath(baseUrl: string, path: string): Promise<string[]> {
+  try {
+    const fullUrl = new URL(path, baseUrl).href;
+    const html = await fetchHTML(fullUrl);
+    return extractEmailsFromHTML(html);
+  } catch {
+    return [];
+  }
+}
+
+async function findContactEmails(
+  homepageHtml: string,
+  baseUrl: string,
+  detectedContactUrl: string,
+  detectedAboutUrl: string,
+): Promise<string[]> {
+  const siteDomain = (() => {
+    try {
+      return new URL(baseUrl).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  })();
+
+  const all = new Set<string>();
+
+  // Homepage first
+  for (const e of extractEmailsFromHTML(homepageHtml)) all.add(e);
+
+  // If we already have a strong on-site match, skip extra fetches
+  const nowRanked = rankEmails(Array.from(all), siteDomain);
+  if (nowRanked.length > 0 && emailTier(nowRanked[0], siteDomain) <= 4) {
+    return nowRanked;
+  }
+
+  // Build candidate paths: detected links first, then common fallbacks
+  const candidates: string[] = [];
+  if (detectedContactUrl) candidates.push(detectedContactUrl);
+  if (detectedAboutUrl) candidates.push(detectedAboutUrl);
+  const commonPaths = ["/contact", "/contact-us", "/about", "/about-us"];
+  const seen = new Set<string>();
+  for (const u of candidates) {
+    try {
+      seen.add(new URL(u, baseUrl).pathname.replace(/\/$/, "").toLowerCase());
+    } catch {
+      /* skip */
+    }
+  }
+  for (const p of commonPaths) {
+    if (!seen.has(p)) {
+      candidates.push(p);
+      seen.add(p);
+    }
+  }
+
+  // Fetch up to 3 extra pages in parallel
+  const results = await Promise.all(
+    candidates.slice(0, 3).map((u) => fetchEmailsFromPath(baseUrl, u)),
+  );
+  for (const list of results) {
+    for (const e of list) all.add(e);
+  }
+
+  return rankEmails(Array.from(all), siteDomain);
+}
+
 /* ── Notes generation ────────────────────────────────── */
 
 function generateNotes(
@@ -380,6 +571,9 @@ export async function extractLeadFromURL(rawUrl: string): Promise<ExtractedLead>
   const contentScore = estimateContentScore(html);
   const revenueScore = estimateRevenueScore(text, premiumSignals);
 
+  const allEmails = await findContactEmails(html, parsed.href, contactUrl, aboutUrl);
+  const email = allEmails[0] || "";
+
   const notes = generateNotes(headingTexts, description, premiumSignals, contactUrl, aboutUrl);
 
   return {
@@ -394,5 +588,7 @@ export async function extractLeadFromURL(rawUrl: string): Promise<ExtractedLead>
     contactUrl,
     aboutUrl,
     premiumSignals,
+    email,
+    allEmails,
   };
 }

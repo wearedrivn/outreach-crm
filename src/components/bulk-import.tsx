@@ -247,6 +247,7 @@ export function BulkImport() {
             niche: row.data.niche,
             instagramHandle: row.data.instagramHandle,
             website: row.data.website,
+            email: row.data.email,
             brandScore: row.data.brandScore,
             contentScore: row.data.contentScore,
             revenueScore: row.data.revenueScore,
@@ -516,6 +517,7 @@ export function BulkImport() {
               <th className="text-left px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Company</th>
               <th className="text-left px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Niche</th>
               <th className="text-left px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Instagram</th>
+              <th className="text-left px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
               <th className="text-center px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">B/C/R</th>
               <th className="text-center px-3 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
               <th className="w-10" />
@@ -583,6 +585,33 @@ export function BulkImport() {
                     <span className="text-indigo-400 text-xs font-mono">
                       {row.data?.instagramHandle || "--"}
                     </span>
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  {row.data && row.status === "success" && row.editing ? (
+                    <input
+                      type="email"
+                      value={row.data.email}
+                      onChange={(e) => updateRowData(row.id, "email", e.target.value)}
+                      placeholder="hello@..."
+                      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 w-44 font-mono"
+                    />
+                  ) : row.data?.email ? (
+                    <span
+                      className="text-emerald-400 text-xs font-mono truncate block max-w-[180px]"
+                      title={row.data.email}
+                    >
+                      {row.data.email}
+                    </span>
+                  ) : row.data ? (
+                    <span
+                      className="text-[10px] font-medium text-amber-400/80"
+                      title="No public email detected — try Instagram DM or the contact page"
+                    >
+                      not found
+                    </span>
+                  ) : (
+                    <span className="text-zinc-700">--</span>
                   )}
                 </td>
                 <td className="px-3 py-3 text-center">

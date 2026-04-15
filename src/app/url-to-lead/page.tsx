@@ -15,6 +15,8 @@ type ExtractedData = {
   contactUrl: string;
   aboutUrl: string;
   premiumSignals: string[];
+  email: string;
+  allEmails: string[];
 };
 
 type Stage = "input" | "loading" | "review" | "saving";
@@ -72,6 +74,9 @@ export default function URLToLeadPage() {
   const [contentScore, setContentScore] = useState(5);
   const [revenueScore, setRevenueScore] = useState(5);
 
+  const [email, setEmail] = useState("");
+  const [allEmails, setAllEmails] = useState<string[]>([]);
+
   // Extra extracted info (read-only display)
   const [contactUrl, setContactUrl] = useState("");
   const [aboutUrl, setAboutUrl] = useState("");
@@ -111,6 +116,8 @@ export default function URLToLeadPage() {
       setContactUrl(d.contactUrl);
       setAboutUrl(d.aboutUrl);
       setPremiumSignals(d.premiumSignals);
+      setEmail(d.email || "");
+      setAllEmails(d.allEmails || []);
       setStage("review");
     } catch {
       setError("Network error. Check the URL and try again.");
@@ -136,6 +143,7 @@ export default function URLToLeadPage() {
           niche: niche.trim(),
           instagramHandle: instagramHandle.trim(),
           website: website.trim(),
+          email: email.trim(),
           brandScore,
           contentScore,
           revenueScore,
@@ -163,6 +171,8 @@ export default function URLToLeadPage() {
     setStage("input");
     setError("");
     setSaveError("");
+    setEmail("");
+    setAllEmails([]);
   }
 
   return (
@@ -322,6 +332,60 @@ export default function URLToLeadPage() {
                   className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 transition-colors"
                 />
               </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-zinc-400">
+                  Contact email
+                </label>
+                {email ? (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400">
+                    Found
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400">
+                    Not found
+                  </span>
+                )}
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="hello@example.com"
+                className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors"
+              />
+              {allEmails.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[11px] text-zinc-500">Other matches:</span>
+                  {allEmails.slice(0, 6).filter((e) => e !== email).map((alt) => (
+                    <button
+                      key={alt}
+                      type="button"
+                      onClick={() => setEmail(alt)}
+                      className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/80 transition-colors"
+                    >
+                      {alt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!email && (
+                <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+                  No public email detected. Try{" "}
+                  <span className="text-indigo-400">Instagram DM outreach</span>
+                  {contactUrl && (
+                    <>
+                      {" "}or the{" "}
+                      <a href={contactUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
+                        contact page
+                      </a>
+                    </>
+                  )}
+                  .
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
