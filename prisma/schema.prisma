@@ -27,11 +27,24 @@ model User {
   createdAt    DateTime @default(now())
   leads        Lead[]
   otps         Otp[]
+  passwordResets PasswordResetToken[]
   stripeCustomerId       String?   @unique
   stripeSubscriptionId   String?
   stripePriceId          String?
   stripeCurrentPeriodEnd DateTime?
   urlToLeadUsage         Int       @default(0)
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 model Otp {
