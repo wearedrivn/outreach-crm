@@ -24,6 +24,14 @@ type EmailSequence = {
   step3SentAt: string | null;
 };
 
+type MessageTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  type: "outreach" | "followup";
+  isDefault: boolean;
+};
+
 type Props = {
   lead: Lead;
   onClose: () => void;
@@ -52,10 +60,14 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [messageType, setMessageType] = useState<"outreach" | "followup">("outreach");
-  const [source, setSource] = useState<"claude" | "template" | null>(null);
+  const [source, setSource] = useState<"claude" | "template" | "user-template" | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [startSequence, setStartSequence] = useState(true);
+
+  // Templates state
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   // History state
   const [logs, setLogs] = useState<EmailLog[]>([]);
@@ -70,6 +82,18 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
     }
   }, [tab]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/message-templates");
+        const data = await res.json();
+        if (Array.isArray(data)) setTemplates(data);
+      } catch {
+        // non-fatal — templates are optional
+      }
+    })();
+  }, []);
+
   async function loadHistory() {
     setHistoryLoading(true);
     try {
@@ -83,7 +107,7 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
     setHistoryLoading(false);
   }
 
-  async function generate(type: "outreach" | "followup") {
+  async function generate(type: "outreach" | "followup", templateId?: string) {
     setLoading(true);
     setError("");
     setCopied(false);
@@ -94,7 +118,11 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
       const res = await fetch("/api/generate-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: lead.id, type }),
+        body: JSON.stringify({
+          leadId: lead.id,
+          type,
+          ...(templateId ? { templateId } : {}),
+        }),
       });
 
       const data = await res.json();
@@ -238,23 +266,71 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
             <>
               {/* Initial state — generate buttons */}
               {!message && !loading && (
-                <div className="text-center py-8 animate-fade-in">
-                  <p className="text-zinc-500 text-sm mb-6">
+                <div className="py-2 animate-fade-in">
+                  <p className="text-zinc-500 text-sm mb-5 text-center">
                     Generate a personalized outreach message for {lead.companyName}
                   </p>
+
+                  {templates.length > 0 && (
+                    <div className="mb-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
+                          Template
+                        </label>
+                        <a
+                          href="/templates"
+                          className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                          Manage →
+                        </a>
+                      </div>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                        className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2.5 text-sm text-zinc-100"
+                      >
+                        <option value="">AI-generated (no template)</option>
+                        {templates.filter((t) => t.type === "outreach").length > 0 && (
+                          <optgroup label="Outreach">
+                            {templates
+                              .filter((t) => t.type === "outreach")
+                              .map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+                        {templates.filter((t) => t.type === "followup").length > 0 && (
+                          <optgroup label="Follow-up">
+                            {templates
+                              .filter((t) => t.type === "followup")
+                              .map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row justify-center gap-3">
                     <button
-                      onClick={() => generate("outreach")}
+                      onClick={() => generate("outreach", selectedTemplateId || undefined)}
                       className="text-sm px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150"
                     >
-                      Generate Outreach
+                      {selectedTemplateId ? "Use Template" : "Generate Outreach"}
                     </button>
-                    <button
-                      onClick={() => generate("followup")}
-                      className="text-sm px-5 py-2.5 bg-zinc-800 text-zinc-300 font-medium rounded-xl hover:bg-zinc-700 transition-colors"
-                    >
-                      Generate Follow-up
-                    </button>
+                    {!selectedTemplateId && (
+                      <button
+                        onClick={() => generate("followup")}
+                        className="text-sm px-5 py-2.5 bg-zinc-800 text-zinc-300 font-medium rounded-xl hover:bg-zinc-700 transition-colors"
+                      >
+                        Generate Follow-up
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -297,7 +373,11 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                   />
                   {source && (
                     <p className="text-[11px] text-zinc-600 mt-1.5">
-                      {source === "claude" ? "Generated by Claude AI" : "Generated from templates"}
+                      {source === "claude"
+                        ? "Generated by Claude AI"
+                        : source === "user-template"
+                          ? "Rendered from your template"
+                          : "Generated from templates"}
                     </p>
                   )}
 
@@ -370,7 +450,7 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                       )}
                     </button>
                     <button
-                      onClick={() => { setSent(false); generate(messageType); }}
+                      onClick={() => { setSent(false); generate(messageType, selectedTemplateId || undefined); }}
                       className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
                     >
                       Regenerate

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserPlan } from "@/lib/plans";
 import { generateOutreach, generateFollowUp } from "@/lib/messages";
+import { buildVariables, renderTemplate } from "@/lib/message-templates";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -34,6 +35,7 @@ Rules:
 type RequestBody = {
   leadId: string;
   type: "outreach" | "followup";
+  templateId?: string;
 };
 
 export async function POST(request: Request) {
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { leadId, type } = body;
+  const { leadId, type, templateId } = body;
   if (!leadId || !type || !["outreach", "followup"].includes(type)) {
     return NextResponse.json(
       { error: "leadId and type (outreach|followup) are required." },
@@ -68,6 +70,17 @@ export async function POST(request: Request) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead || lead.userId !== session.user.id) {
     return NextResponse.json({ error: "Lead not found." }, { status: 404 });
+  }
+
+  // ── Custom template path: render user-owned template with variables ──
+  if (templateId) {
+    const template = await prisma.messageTemplate.findUnique({ where: { id: templateId } });
+    if (!template || template.userId !== session.user.id) {
+      return NextResponse.json({ error: "Template not found." }, { status: 404 });
+    }
+    const vars = buildVariables(lead);
+    const message = renderTemplate(template.body, vars);
+    return NextResponse.json({ message, source: "user-template", templateName: template.name });
   }
 
   // ── Fallback: use template engine when no API key is set ──
