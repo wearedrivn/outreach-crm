@@ -30,6 +30,7 @@ model User {
   passwordResets PasswordResetToken[]
   messageTemplates MessageTemplate[]
   templatesSeededAt DateTime?
+  emailConnections EmailConnection[]
   stripeCustomerId       String?   @unique
   stripeSubscriptionId   String?
   stripePriceId          String?
@@ -136,6 +137,32 @@ model SequenceTemplate {
   steps       SequenceTemplateStep[]
   sequences   EmailSequence[]
 
+  @@index([userId])
+}
+
+model EmailConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String
+  email          String
+  status         String   @default("active")
+  lastError      String?
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scope          String?
+  smtpHost       String?
+  smtpPort       Int?
+  smtpSecure     Boolean?
+  smtpUser       String?
+  smtpPassEnc    String?
+  imapHost       String?
+  imapPort       Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, provider])
   @@index([userId])
 }
 

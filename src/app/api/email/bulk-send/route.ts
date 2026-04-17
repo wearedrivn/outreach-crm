@@ -112,7 +112,7 @@ export async function POST(request: Request) {
         const messageBody = generateOutreach(lead);
         const subject = `Quick thought on ${lead.companyName}`;
 
-        const result = await sendOutreachEmail(lead.email, subject, messageBody);
+        const result = await sendOutreachEmail(session.user.id, lead.email, subject, messageBody);
 
         await prisma.emailLog.create({
           data: {

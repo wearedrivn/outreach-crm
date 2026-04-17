@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         const body = generateFollowUp(lead);
         const subject = `Following up — ${lead.companyName}`;
 
-        const result = await sendOutreachEmail(lead.email, subject, body);
+        const result = await sendOutreachEmail(lead.userId, lead.email, subject, body);
 
         await prisma.emailLog.create({
           data: {
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
         const body = generateFollowUp(lead);
         const subject = `One last thought — ${lead.companyName}`;
 
-        const result = await sendOutreachEmail(lead.email, subject, body);
+        const result = await sendOutreachEmail(lead.userId, lead.email, subject, body);
 
         await prisma.emailLog.create({
           data: {

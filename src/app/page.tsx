@@ -51,6 +51,12 @@ export default async function Home() {
             Sequences
           </Link>
           <Link
+            href="/connections"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
+          >
+            Connections
+          </Link>
+          <Link
             href="/pricing"
             className="text-xs font-medium px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
           >

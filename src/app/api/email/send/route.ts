@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await sendOutreachEmail(lead.email, subject, emailBody);
+    const result = await sendOutreachEmail(session.user.id, lead.email, subject, emailBody);
 
     const emailLog = await prisma.emailLog.create({
       data: {
