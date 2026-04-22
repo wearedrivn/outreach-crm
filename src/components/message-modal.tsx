@@ -65,9 +65,15 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
   const [sent, setSent] = useState(false);
   const [startSequence, setStartSequence] = useState(true);
 
+  const [markingContacted, setMarkingContacted] = useState(false);
+  const [markedContacted, setMarkedContacted] = useState(false);
+
   // Templates state
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
+  // Connection state
+  const [hasConnection, setHasConnection] = useState<boolean | null>(null);
 
   // History state
   const [logs, setLogs] = useState<EmailLog[]>([]);
@@ -75,6 +81,7 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const hasEmail = Boolean(lead.email);
+  const canSend = hasEmail && hasConnection === true;
 
   useEffect(() => {
     if (tab === "history") {
@@ -92,7 +99,46 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
         // non-fatal — templates are optional
       }
     })();
+
+    (async () => {
+      try {
+        const res = await fetch("/api/connections");
+        const data = await res.json();
+        const active = Array.isArray(data.connections)
+          ? data.connections.some((c: { status: string }) => c.status === "active")
+          : false;
+        setHasConnection(active);
+      } catch {
+        setHasConnection(false);
+      }
+    })();
   }, []);
+
+  async function handleMarkContacted() {
+    setMarkingContacted(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "contacted",
+          lastContactedAt: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Failed to mark as contacted.");
+        setMarkingContacted(false);
+        return;
+      }
+      setMarkedContacted(true);
+      onRefresh?.();
+    } catch {
+      setError("Network error.");
+    }
+    setMarkingContacted(false);
+  }
 
   async function loadHistory() {
     setHistoryLoading(true);
@@ -382,7 +428,7 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                   )}
 
                   {/* Sequence toggle */}
-                  {hasEmail && messageType === "outreach" && !sent && (
+                  {canSend && messageType === "outreach" && !sent && (
                     <label className="flex items-center gap-2.5 mt-4 cursor-pointer group">
                       <input
                         type="checkbox"
@@ -407,27 +453,64 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                     </div>
                   )}
 
+                  {/* Marked contacted confirmation */}
+                  {markedContacted && (
+                    <div className="mt-4 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 animate-scale-in flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Lead marked as contacted
+                    </div>
+                  )}
+
+                  {/* No-connection helper */}
+                  {hasEmail && hasConnection === false && !sent && (
+                    <div className="mt-4 text-xs text-zinc-400 bg-zinc-800/40 border border-zinc-800/80 rounded-xl px-4 py-3">
+                      Connect your email to send directly from the app, or copy the message and send it manually.
+                      <a
+                        href="/connections"
+                        className="ml-2 text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+                      >
+                        Connect Email →
+                      </a>
+                    </div>
+                  )}
+
+                  {/* No-email helper */}
+                  {!hasEmail && !sent && (
+                    <div className="mt-4 text-xs text-zinc-400 bg-zinc-800/40 border border-zinc-800/80 rounded-xl px-4 py-3">
+                      Add an email to this lead to enable sending, or copy the message and send it from your own inbox.
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2.5 mt-5">
-                    {/* Send email button */}
-                    {hasEmail && !sent && (
-                      <button
-                        onClick={handleSendEmail}
-                        disabled={sending || !subject || !message}
-                        className="text-sm px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        {sending && (
-                          <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        )}
-                        {sending ? "Sending..." : "Send Email"}
-                      </button>
-                    )}
-
-                    {/* No email warning */}
-                    {!hasEmail && (
-                      <span className="text-xs text-zinc-500 py-2.5">
-                        Add an email to this lead to send directly
-                      </span>
+                    {/* Send email button — enabled only with email + connection */}
+                    {!sent && (
+                      canSend ? (
+                        <button
+                          onClick={handleSendEmail}
+                          disabled={sending || !subject || !message}
+                          className="text-sm px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-500 active:bg-indigo-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {sending && (
+                            <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          )}
+                          {sending ? "Sending..." : "Send Email"}
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          title={
+                            !hasEmail
+                              ? "Add an email to this lead to enable sending."
+                              : "Connect your email to send from the app."
+                          }
+                          className="text-sm px-4 py-2.5 bg-zinc-800 text-zinc-500 font-medium rounded-xl cursor-not-allowed opacity-60"
+                        >
+                          Send Email
+                        </button>
+                      )
                     )}
 
                     <button
@@ -446,17 +529,39 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                           Copied
                         </>
                       ) : (
-                        "Copy"
+                        "Copy Message"
                       )}
                     </button>
+
+                    {/* Mark as contacted — manual fallback, always available */}
+                    {!sent && lead.status !== "contacted" && (
+                      <button
+                        onClick={handleMarkContacted}
+                        disabled={markingContacted || markedContacted}
+                        className="text-sm px-4 py-2.5 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {markingContacted ? "Marking..." : markedContacted ? "Marked" : "Mark as Contacted"}
+                      </button>
+                    )}
+
+                    {/* Connect email shortcut — only when no connection */}
+                    {hasConnection === false && !sent && (
+                      <a
+                        href="/connections"
+                        className="text-sm px-4 py-2.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 border border-indigo-500/25 rounded-xl transition-colors font-medium"
+                      >
+                        Connect Email
+                      </a>
+                    )}
+
                     <button
-                      onClick={() => { setSent(false); generate(messageType, selectedTemplateId || undefined); }}
+                      onClick={() => { setSent(false); setMarkedContacted(false); generate(messageType, selectedTemplateId || undefined); }}
                       className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
                     >
                       Regenerate
                     </button>
                     <button
-                      onClick={() => { setSent(false); generate(messageType === "outreach" ? "followup" : "outreach"); }}
+                      onClick={() => { setSent(false); setMarkedContacted(false); generate(messageType === "outreach" ? "followup" : "outreach"); }}
                       className="text-sm px-4 py-2.5 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors font-medium"
                     >
                       {messageType === "outreach" ? "Follow-up" : "Outreach"}

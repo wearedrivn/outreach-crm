@@ -173,12 +173,9 @@ async function processOneLead(
 
   const conn = await getActiveConnection(userId);
   if (!conn) {
-    const hasResend = !!process.env.RESEND_API_KEY;
-    if (!hasResend) {
-      await log(userId, "skipped", `${lead.companyName}: no email connection and no fallback configured`, "success", lead.id);
-      result.skipped++;
-      return;
-    }
+    await log(userId, "skipped", `${lead.companyName}: no email connected, message ready to copy and send manually`, "success", lead.id);
+    result.skipped++;
+    return;
   }
 
   try {

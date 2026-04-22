@@ -34,8 +34,8 @@ export function BulkSendModal({ selectedCount, onClose, onSend, onDone }: Props)
       const data = await onSend({ skipContacted, startSequence });
       setResults(data.results);
       setSummary(data.summary);
-    } catch {
-      setError("Bulk send failed. Please try again.");
+    } catch (err) {
+      setError((err as Error).message || "Bulk send failed. Please try again.");
     }
     setSending(false);
   }

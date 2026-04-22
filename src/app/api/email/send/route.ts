@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserPlan } from "@/lib/plans";
 import { sendOutreachEmail } from "@/lib/email";
+import { getActiveConnection } from "@/lib/email-connections";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
   if (!lead.email) {
     return NextResponse.json(
       { error: "This lead has no email address. Add one first." },
+      { status: 400 },
+    );
+  }
+
+  const connection = await getActiveConnection(session.user.id);
+  if (!connection) {
+    return NextResponse.json(
+      {
+        error: "Connect your email to send directly from the app, or copy the message and send it manually.",
+        needsConnection: true,
+      },
       { status: 400 },
     );
   }

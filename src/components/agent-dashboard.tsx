@@ -51,6 +51,7 @@ export function AgentDashboard() {
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_SETTINGS);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<Stats>({ todaySends: 0, queueCount: 0 });
+  const [hasConnection, setHasConnection] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -59,15 +60,21 @@ export function AgentDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const [settingsRes, logsRes] = await Promise.all([
+      const [settingsRes, logsRes, connRes] = await Promise.all([
         fetch("/api/agent/settings"),
         fetch("/api/agent/logs?limit=50"),
+        fetch("/api/connections"),
       ]);
       const settingsData = await settingsRes.json();
       const logsData = await logsRes.json();
+      const connData = await connRes.json();
       setSettings(settingsData);
       setLogs(logsData.logs ?? []);
       setStats(logsData.stats ?? { todaySends: 0, queueCount: 0 });
+      const active = Array.isArray(connData.connections)
+        ? connData.connections.some((c: { status: string }) => c.status === "active")
+        : false;
+      setHasConnection(active);
     } catch {
       setError("Failed to load agent data.");
     }
@@ -79,6 +86,10 @@ export function AgentDashboard() {
   }, [loadData]);
 
   async function updateSetting(key: keyof AgentSettings, value: boolean | number) {
+    if ((key === "autoSendFirst" || key === "autoEnrollSequence") && value === true && !hasConnection) {
+      setError("Connect your email first to enable automatic sending.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -150,6 +161,20 @@ export function AgentDashboard() {
         </div>
       )}
 
+      {hasConnection === false && (
+        <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start justify-between gap-3">
+          <span>
+            No email connected. The agent can still score leads, generate messages, and draft sequences — but automatic sending is disabled.
+          </span>
+          <a
+            href="/connections"
+            className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 transition-colors"
+          >
+            Connect Email
+          </a>
+        </div>
+      )}
+
       {/* Status + Run */}
       <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
@@ -209,17 +234,25 @@ export function AgentDashboard() {
           />
           <Toggle
             label="Auto-send first email"
-            description="Automatically send the initial outreach email"
+            description={
+              hasConnection === false
+                ? "Requires a connected email account"
+                : "Automatically send the initial outreach email"
+            }
             checked={settings.autoSendFirst}
             onChange={(v) => updateSetting("autoSendFirst", v)}
-            disabled={saving}
+            disabled={saving || hasConnection === false}
           />
           <Toggle
             label="Auto-enroll in sequence"
-            description="Start follow-up sequence after first email"
+            description={
+              hasConnection === false
+                ? "Requires a connected email account"
+                : "Start follow-up sequence after first email"
+            }
             checked={settings.autoEnrollSequence}
             onChange={(v) => updateSetting("autoEnrollSequence", v)}
-            disabled={saving}
+            disabled={saving || hasConnection === false}
           />
           <Toggle
             label="High opportunity only"

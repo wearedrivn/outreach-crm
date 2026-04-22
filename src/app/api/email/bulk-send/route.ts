@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserPlan } from "@/lib/plans";
 import { sendOutreachEmail } from "@/lib/email";
+import { getActiveConnection } from "@/lib/email-connections";
 import { generateOutreach } from "@/lib/messages";
 import { NextResponse } from "next/server";
 
@@ -54,6 +55,17 @@ export async function POST(request: Request) {
   if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
     return NextResponse.json(
       { error: "leadIds array is required." },
+      { status: 400 },
+    );
+  }
+
+  const connection = await getActiveConnection(session.user.id);
+  if (!connection) {
+    return NextResponse.json(
+      {
+        error: "Connect your email to send directly from the app, or copy each message and send it manually.",
+        needsConnection: true,
+      },
       { status: 400 },
     );
   }
