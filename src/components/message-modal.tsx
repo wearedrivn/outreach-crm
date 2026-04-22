@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Lead } from "@prisma/client";
 
 type EmailLog = {
@@ -34,9 +34,17 @@ type MessageTemplate = {
 
 type Props = {
   lead: Lead;
+  leads?: Lead[];
+  onLeadChange?: (lead: Lead) => void;
   onClose: () => void;
   onRefresh?: () => void;
 };
+
+const ACTIONABLE_STATUSES = new Set(["new"]);
+
+function isActionable(l: Lead): boolean {
+  return Boolean(l.email) && !l.unsubscribed && ACTIONABLE_STATUSES.has(l.status);
+}
 
 function SkeletonLines() {
   return (
@@ -52,7 +60,7 @@ function SkeletonLines() {
 
 type Tab = "compose" | "history";
 
-export function MessageModal({ lead, onClose, onRefresh }: Props) {
+export function MessageModal({ lead, leads, onLeadChange, onClose, onRefresh }: Props) {
   const [tab, setTab] = useState<Tab>("compose");
   const [message, setMessage] = useState("");
   const [subject, setSubject] = useState("");
@@ -88,6 +96,84 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
       loadHistory();
     }
   }, [tab]);
+
+  // Reset per-lead state when the lead changes (navigation)
+  useEffect(() => {
+    setMessage("");
+    setSubject("");
+    setSource(null);
+    setSent(false);
+    setCopied(false);
+    setMarkedContacted(false);
+    setError("");
+    setStartSequence(true);
+    setMessageType("outreach");
+    setSelectedTemplateId("");
+    setTab("compose");
+  }, [lead.id]);
+
+  // Build actionable navigation queue from the leads list
+  const actionableLeads = (leads ?? []).filter(
+    (l) => isActionable(l) || l.id === lead.id,
+  );
+  const currentIndex = actionableLeads.findIndex((l) => l.id === lead.id);
+  const prevLead =
+    currentIndex > 0 ? actionableLeads[currentIndex - 1] : null;
+  const nextLead =
+    currentIndex >= 0 && currentIndex < actionableLeads.length - 1
+      ? actionableLeads[currentIndex + 1]
+      : null;
+
+  const advanceTo = useCallback(
+    async (target: Lead, autoMarkCurrent: boolean) => {
+      if (autoMarkCurrent && lead.status === "new") {
+        try {
+          await fetch(`/api/leads/${lead.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "contacted",
+              lastContactedAt: new Date().toISOString(),
+            }),
+          });
+          onRefresh?.();
+        } catch {
+          // non-fatal — still navigate
+        }
+      }
+      onLeadChange?.(target);
+    },
+    [lead.id, lead.status, onLeadChange, onRefresh],
+  );
+
+  const goNext = useCallback(() => {
+    if (nextLead) advanceTo(nextLead, true);
+  }, [nextLead, advanceTo]);
+
+  const goPrev = useCallback(() => {
+    if (prevLead) advanceTo(prevLead, false);
+  }, [prevLead, advanceTo]);
+
+  // Keyboard shortcuts: ArrowRight = next, ArrowLeft = prev
+  useEffect(() => {
+    if (!leads) return;
+    function handleKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goNext();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrev();
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [leads, goNext, goPrev]);
 
   useEffect(() => {
     (async () => {
@@ -378,6 +464,17 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                       </button>
                     )}
                   </div>
+
+                  {leads && (
+                    <NavRow
+                      prevLead={prevLead}
+                      nextLead={nextLead}
+                      currentIndex={currentIndex}
+                      total={actionableLeads.length}
+                      onPrev={goPrev}
+                      onNext={goNext}
+                    />
+                  )}
                 </div>
               )}
 
@@ -567,6 +664,17 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
                       {messageType === "outreach" ? "Follow-up" : "Outreach"}
                     </button>
                   </div>
+
+                  {leads && (
+                    <NavRow
+                      prevLead={prevLead}
+                      nextLead={nextLead}
+                      currentIndex={currentIndex}
+                      total={actionableLeads.length}
+                      onPrev={goPrev}
+                      onNext={goNext}
+                    />
+                  )}
                 </div>
               )}
             </>
@@ -667,6 +775,62 @@ export function MessageModal({ lead, onClose, onRefresh }: Props) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function NavRow({
+  prevLead,
+  nextLead,
+  currentIndex,
+  total,
+  onPrev,
+  onNext,
+}: {
+  prevLead: Lead | null;
+  nextLead: Lead | null;
+  currentIndex: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const position = currentIndex >= 0 ? currentIndex + 1 : 0;
+  const atEnd = !nextLead;
+
+  return (
+    <div className="mt-5 pt-4 border-t border-zinc-800/60">
+      {atEnd && total > 0 && position === total && (
+        <p className="text-xs text-zinc-500 text-center mb-3">
+          You&rsquo;re all caught up.
+        </p>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={onPrev}
+          disabled={!prevLead}
+          className="text-sm px-3.5 py-2 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          title={prevLead ? `Previous: ${prevLead.companyName} (←)` : "No previous lead"}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Previous
+        </button>
+        <span className="text-[11px] text-zinc-600 tabular-nums">
+          {total > 0 ? `${position} / ${total}` : ""}
+        </span>
+        <button
+          onClick={onNext}
+          disabled={!nextLead}
+          className="text-sm px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium rounded-xl transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 flex items-center gap-1.5"
+          title={nextLead ? `Next: ${nextLead.companyName} (→) — marks this lead as contacted` : "No more leads"}
+        >
+          Next Lead
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
       </div>
     </div>
   );

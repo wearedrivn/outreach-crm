@@ -224,7 +224,13 @@ export function Dashboard({ initialLeads, plan }: Props) {
       )}
 
       {messageLead && (
-        <MessageModal lead={messageLead} onClose={() => setMessageLead(null)} onRefresh={refreshLeads} />
+        <MessageModal
+          lead={messageLead}
+          leads={sorted}
+          onLeadChange={setMessageLead}
+          onClose={() => setMessageLead(null)}
+          onRefresh={refreshLeads}
+        />
       )}
 
       {showImport && (
